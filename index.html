@@ -10,6 +10,12 @@
 <meta name="theme-color" content="#fdf6f0">
 <meta name="description" content="每日备忘 Memo · 语音/文字智能拆解待办">
 
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+<!-- iOS 启动画面（消除黑屏） -->
+<link rel="apple-touch-startup-image" href="icons/apple-touch-icon-152.png">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+
 <!-- Favicon -->
 <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
@@ -160,6 +166,13 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,Blink
 </style>
 </head>
 <body>
+
+<!-- 启动遮罩（消除黑屏） -->
+<div id="splash" style="position:fixed;inset:0;background:#fdf6f0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;transition:opacity .4s">
+  <img src="icons/apple-touch-icon-152.png" style="width:90px;height:90px;border-radius:20px;box-shadow:0 4px 16px rgba(0,0,0,.1)" alt="logo">
+  <div style="margin-top:16px;font-size:16px;font-weight:700;color:#5a5a5a">每日备忘</div>
+  <div style="margin-top:4px;font-size:11px;color:#a0a0a0;letter-spacing:1px">Memo</div>
+</div>
 
 <div class="top">
   <div class="t">🌿 每日备忘 <small>Memo</small></div>
@@ -598,6 +611,13 @@ function updateStat(){
 
 // ===== 初始化 =====
 renderToday();updateStat();
+// 隐藏启动遮罩
+window.addEventListener('load',()=>{
+  setTimeout(()=>{
+    const s=document.getElementById('splash');
+    if(s){s.style.opacity='0';setTimeout(()=>s.remove(),400)}
+  },300);
+});
 // 回车发送
 document.getElementById('inputText').addEventListener('keydown',e=>{
   if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();parseInput()}

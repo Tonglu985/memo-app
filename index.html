@@ -326,6 +326,24 @@ function dateLabel(dateStr){
 }
 
 // ===== 智能拆解 =====
+// 剥离文字里的相对时间词，只保留任务内容
+function cleanText(text){
+  return text
+    .replace(/今天|今日|today/gi,'')
+    .replace(/明天|明日|tomorrow/gi,'')
+    .replace(/后天|后日/g,'')
+    .replace(/大后天/g,'')
+    .replace(/下周[一二三四五六日天]/g,'')
+    .replace(/周[一二三四五六日天](?!末)/g,'')
+    .replace(/\d{1,2}月\d{1,2}[号日]/g,'')
+    .replace(/\d{1,2}[号日](?=[，,。;；\s]|$)/g,'')
+    .replace(/下午|上午|中午|早上|晚上|晚|早/g,'')
+    .replace(/\d{1,2}[点时:：]\d{0,2}(分)?/g,'')
+    .replace(/^[，,。;；、\s]+|[，,。;；、\s]+$/g,'')
+    .replace(/\s{2,}/g,' ')
+    .trim();
+}
+
 function parseInput(){
   const text=document.getElementById('inputText').value.trim();
   if(!text){alert('请输入内容');return}
@@ -336,9 +354,13 @@ function parseInput(){
   // 如果只有一段，不拆
   let items=[];
   if(parts.length<=1){
-    items=[{text:text,date:parseDate(text)}];
+    const cleaned=cleanText(text);
+    items=[{text:cleaned||text,date:parseDate(text)}];
   }else{
-    items=parts.map(p=>({text:p,date:parseDate(p)}));
+    items=parts.map(p=>{
+      const cleaned=cleanText(p);
+      return{text:cleaned||p,date:parseDate(p)};
+    });
   }
 
   // 显示预览

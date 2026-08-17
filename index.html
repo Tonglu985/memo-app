@@ -88,6 +88,11 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,Blink
 .parse-item .pd{font-size:11px;background:var(--blue);color:#fff;padding:2px 8px;border-radius:10px;flex:none}
 .parse-item .pn{flex:1}
 .parse-item .px{color:var(--text-light);cursor:pointer;font-size:16px}
+.parse-item input[type=date],.parse-item input[type=time]{
+  border:1px solid var(--blue);border-radius:8px;padding:3px 6px;font-size:11px;color:var(--blue-d);
+  background:var(--blue-bg);flex:none;width:auto;max-width:120px;font-family:inherit;
+}
+.parse-item input[type=time]{max-width:80px}
 /* Tab */
 .tabs{display:flex;gap:0;background:var(--card);border-radius:14px;padding:4px;margin-bottom:16px;border:1px solid var(--border)}
 .tab{flex:1;padding:10px;border-radius:10px;text-align:center;cursor:pointer;font-size:13px;font-weight:600;color:var(--text-dim);transition:all .2s;border:none;background:transparent}
@@ -314,6 +319,37 @@ function parseDate(text){
   return date;
 }
 
+// ===== 时间解析（X点/X点X分/下午X点/上午X点）=====
+function parseTime(text){
+  // 下午/晚上 X点 → +12（除非已经是12点）
+  let hour=null,min=0;
+  // 匹配 "下午3点" "晚上8点30分" "上午9点" "中午12点" "3点" "15:30" "3点15"
+  const pmMatch=text.match(/(?:下午|晚上|晚)(\d{1,2})[点时:：](\d{0,2})/);
+  const amMatch=text.match(/(?:上午|早上|早|中午)(\d{1,2})[点时:：](\d{0,2})/);
+  const plainMatch=text.match(/(?<![\d点时:：前后午上下晚中早])(\d{1,2})[点时:：](\d{0,2})/);
+  const colonMatch=text.match(/(\d{1,2}):(\d{2})/);
+
+  if(pmMatch){
+    hour=parseInt(pmMatch[1]);
+    if(hour<12)hour+=12;
+    if(pmMatch[2])min=parseInt(pmMatch[2]);
+  }else if(amMatch){
+    hour=parseInt(amMatch[1]);
+    if(amMatch[2])min=parseInt(amMatch[2]);
+  }else if(colonMatch){
+    hour=parseInt(colonMatch[1]);
+    min=parseInt(colonMatch[2]);
+  }else if(plainMatch){
+    hour=parseInt(plainMatch[1]);
+    if(plainMatch[2])min=parseInt(plainMatch[2]);
+  }
+
+  if(hour===null)return null;
+  if(hour<0||hour>23)return null;
+  if(min<0||min>59)return null;
+  return String(hour).padStart(2,'0')+':'+String(min).padStart(2,'0');
+}
+
 function dateLabel(dateStr){
   const today=getDS(getNow());
   const tomorrow=getDS(new Date(getNow().getTime()+86400000));
@@ -355,49 +391,40 @@ function parseInput(){
   let items=[];
   if(parts.length<=1){
     const cleaned=cleanText(text);
-    items=[{text:cleaned||text,date:parseDate(text)}];
+    items=[{text:cleaned||text,date:parseDate(text),time:parseTime(text)}];
   }else{
     items=parts.map(p=>{
       const cleaned=cleanText(p);
-      return{text:cleaned||p,date:parseDate(p)};
+      return{text:cleaned||p,date:parseDate(p),time:parseTime(p)};
     });
   }
 
   // 显示预览
+  renderParsePreview(items);
+}
+
+function renderParsePreview(items){
+  window._parseItems=items;
   const preview=document.getElementById('parsePreview');
   preview.classList.add('show');
-  preview.innerHTML=`<div class="pt">🔍 拆解出 ${items.length} 项待办：</div>`+
+  preview.innerHTML=`<div class="pt">🔍 拆解出 ${items.length} 项待办（点日期/时间可修改）：</div>`+
     items.map((it,i)=>
       `<div class="parse-item">
-        <span class="pd">${dateLabel(it.date)}</span>
-        <span class="pn">${it.text}</span>
+        <input type="date" class="pd-input" value="${it.date}" onchange="window._parseItems[${i}].date=this.value;renderParsePreview(window._parseItems)">
+        <input type="time" class="pt-input" value="${it.time||''}" onchange="window._parseItems[${i}].time=this.value||null;renderParsePreview(window._parseItems)" placeholder="时间">
+        <span class="pn">${escapeHtml(it.text)}</span>
         <span class="px" onclick="removeParseItem(${i})">✕</span>
       </div>`).join('')+
     `<div style="display:flex;gap:8px;margin-top:10px">
       <button class="send-btn" style="background:var(--green-d)" onclick="confirmParse()">✓ 确认添加</button>
       <button class="send-btn" style="background:var(--gray-d)" onclick="cancelParse()">取消</button>
     </div>`;
-
-  window._parseItems=items;
 }
 
 function removeParseItem(i){
   window._parseItems.splice(i,1);
-  // 重新渲染
-  const items=window._parseItems;
-  const preview=document.getElementById('parsePreview');
-  if(items.length===0){preview.classList.remove('show');return}
-  preview.innerHTML=`<div class="pt">🔍 拆解出 ${items.length} 项待办：</div>`+
-    items.map((it,i)=>
-      `<div class="parse-item">
-        <span class="pd">${dateLabel(it.date)}</span>
-        <span class="pn">${it.text}</span>
-        <span class="px" onclick="removeParseItem(${i})">✕</span>
-      </div>`).join('')+
-    `<div style="display:flex;gap:8px;margin-top:10px">
-      <button class="send-btn" style="background:var(--green-d)" onclick="confirmParse()">✓ 确认添加</button>
-      <button class="send-btn" style="background:var(--gray-d)" onclick="cancelParse()">取消</button>
-    </div>`;
+  if(window._parseItems.length===0){document.getElementById('parsePreview').classList.remove('show');return}
+  renderParsePreview(window._parseItems);
 }
 
 function confirmParse(){
@@ -405,13 +432,14 @@ function confirmParse(){
   if(!items||items.length===0)return;
   const todos=getTodos();
   items.forEach(it=>{
-    todos.push({id:genId(),text:it.text,date:it.date,done:false,createdAt:getDS(getNow())});
+    todos.push({id:genId(),text:it.text,date:it.date,time:it.time||null,done:false,createdAt:getDS(getNow()),notified:false});
   });
   saveTodos(todos);
   document.getElementById('inputText').value='';
   document.getElementById('parsePreview').classList.remove('show');
   window._parseItems=null;
   renderToday();renderCal();updateStat();
+  checkNotifyPermission();
 }
 
 function cancelParse(){
@@ -465,8 +493,47 @@ function editTodoDate(id){
   const todos=getTodos();
   const t=todos.find(x=>x.id===id);
   if(!t)return;
-  const newDate=prompt('修改日期（YYYY-MM-DD）：',t.date);
-  if(newDate&&/^\d{4}-\d{2}-\d{2}$/.test(newDate)){t.date=newDate;saveTodos(todos);renderToday();renderCal();updateStat()}
+  showEditPopover(t,'date');
+}
+function editTodoTime(id){
+  const todos=getTodos();
+  const t=todos.find(x=>x.id===id);
+  if(!t)return;
+  showEditPopover(t,'time');
+}
+// 弹出编辑小窗（日期+时间一起改）
+function showEditPopover(t,focus){
+  const overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.onclick=e=>{if(e.target===overlay)overlay.remove()};
+  overlay.innerHTML=`
+    <div style="background:#fff;border-radius:16px;padding:20px;width:100%;max-width:320px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:14px;color:var(--text)">编辑待办时间</div>
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:12px;padding:8px;background:var(--bg);border-radius:8px">${escapeHtml(t.text)}</div>
+      <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">日期</label>
+      <input type="date" id="edDate" value="${t.date}" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:10px;font-size:14px;margin-bottom:12px">
+      <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">时间（留空则不提醒）</label>
+      <input type="time" id="edTime" value="${t.time||''}" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:10px;font-size:14px;margin-bottom:16px">
+      <div style="display:flex;gap:8px">
+        <button onclick="applyEdit('${t.id}')" style="flex:1;padding:10px;background:var(--green-d);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600">✓ 保存</button>
+        <button onclick="this.closest('div[style*=\"fixed\"]').remove()" style="flex:1;padding:10px;background:var(--gray);color:var(--text);border:none;border-radius:10px;font-size:14px">取消</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  window._editId=t.id;
+}
+function applyEdit(id){
+  const todos=getTodos();
+  const t=todos.find(x=>x.id===id);
+  if(!t)return;
+  const newDate=document.getElementById('edDate').value;
+  const newTime=document.getElementById('edTime').value;
+  if(newDate)t.date=newDate;
+  t.time=newTime||null;
+  t.notified=false; // 改时间后重置通知状态
+  saveTodos(todos);
+  document.querySelector('div[style*="fixed"]')?.remove();
+  renderToday();renderCal();updateStat();
 }
 
 // ===== 渲染今日 =====
@@ -525,6 +592,10 @@ function renderToday(){
 function renderTodoItem(t){
   const tag=getTag(t.text);
   const overdue=!t.done&&t.date<getDS(getNow());
+  const timeStr=t.time?` · ⏰${t.time}`:'';
+  const timeBtn=t.time
+    ? `<span style="cursor:pointer;color:var(--pink-d)" onclick="editTodoTime('${t.id}')">⏰${t.time}</span>`
+    : `<span style="cursor:pointer;color:var(--text-light)" onclick="editTodoTime('${t.id}')">+提醒</span>`;
   return `<div class="todo-item ${t.done?'done':''}">
     <div class="todo-chk ${t.done?'done':''}" onclick="toggleTodo('${t.id}')"></div>
     <div class="todo-body">
@@ -533,6 +604,7 @@ function renderTodoItem(t){
         <span class="todo-tag ${tag}">${tagLabel(tag)}</span>
         <span>${dateLabel(t.date)}${overdue?' · 已过期':''}</span>
         <span style="cursor:pointer;color:var(--blue-d)" onclick="editTodoDate('${t.id}')">📅改日期</span>
+        ${timeBtn}
       </div>
     </div>
     <span class="todo-edit" onclick="editTodo('${t.id}')">✏️</span>
@@ -630,6 +702,56 @@ function updateStat(){
   document.getElementById('stDone').textContent=doneCount;
   document.getElementById('stRate').textContent=rate+'%';
 }
+
+// ===== 到期通知 =====
+function checkNotifyPermission(){
+  if(!('Notification' in window))return;
+  if(Notification.permission==='default'){
+    Notification.requestPermission().then(p=>{
+      if(p==='granted')console.log('通知已开启');
+    });
+  }
+}
+// 首次交互后请求权限
+document.addEventListener('click',()=>{checkNotifyPermission()},{once:true});
+
+function checkReminders(){
+  if(!('Notification' in window)||Notification.permission!=='granted')return;
+  const todos=getTodos();
+  const now=getNow();
+  const today=getDS(now);
+  let changed=false;
+  todos.forEach(t=>{
+    if(t.done||t.notified||!t.time)return;
+    if(t.date!==today)return; // 只提醒今天的
+    const [h,m]=t.time.split(':').map(Number);
+    const todoTime=new Date(now.getFullYear(),now.getMonth(),now.getDate(),h,m);
+    // 到点（或已过1分钟内）且未通知
+    if(now>=todoTime&&now-todoTime<60000){
+      try{
+        new Notification('⏰ 待办提醒',{
+          body:t.text,
+          icon:'icons/apple-touch-icon-152.png',
+          tag:t.id,
+          requireInteraction:true
+        });
+      }catch(e){
+        // iOS Safari 可能不支持 new Notification，用 Service Worker
+      }
+      t.notified=true;changed=true;
+    }else if(now>todoTime&&now-todoTime>=60000){
+      // 超过1分钟未通知的也标记，避免堆积
+      t.notified=true;changed=true;
+    }
+  });
+  if(changed)saveTodos(todos);
+}
+// 每30秒检查一次提醒
+setInterval(checkReminders,30000);
+// 页面重新可见时也检查
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden){checkReminders();if(currentTab==='today')renderToday();if(currentTab==='calendar')renderCal()}
+});
 
 // ===== 初始化 =====
 renderToday();updateStat();
